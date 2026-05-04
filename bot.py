@@ -15,411 +15,624 @@ logger = logging.getLogger(__name__)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-# Conversation states
-WAITING_PHOTO, ASK_Q1, ASK_Q2, ASK_Q3, ASK_Q4, SHOW_RESULT = range(6)
-
-# ── Brand products catalog — Real Lafeminite products ──────────────────────
 STORE_URL = "https://lafeminite1.com/ar"
 
-LAVMNITE_PRODUCTS = {
-    "جافة": [
-        {
-            "name": "🌵 زيت التين الشوكي — لافمنيت",
-            "desc": "زيت فاخر يُفتّح ويُصفّي ويشدّ البشرة الجافة، نتائج ملحوظة من أول استخدام",
-            "url": f"{STORE_URL}/منتجات-التين-الشوكي-من-لافيمينت/c1289226895"
-        },
-        {
-            "name": "🍯 صابونة النيلة — لافمنيت",
-            "desc": "تُنظف وتُرطب وتُشرق البشرة، رغوة كثيفة وريحة تجنن — الأكثر مبيعاً",
-            "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493"
-        },
-    ],
-    "دهنية": [
-        {
-            "name": "🫧 صابونة النيلة — لافمنيت",
-            "desc": "تُنظف المسام وتوحّد لون البشرة الدهنية، تُقلل الحبوب مع الاستمرار",
-            "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493"
-        },
-        {
-            "name": "🏔️ منتجات العكر الفاسي — لافمنيت",
-            "desc": "طين مغربي أصيل يسحب الشوائب والزيوت الزائدة، مثالي للبشرة الدهنية",
-            "url": f"{STORE_URL}/منتجات-العكر-الفاسي-من-لافيمينت/c424452352"
-        },
-    ],
-    "مختلطة": [
-        {
-            "name": "🌿 مجموعة الحمام المغربي — لافمنيت",
-            "desc": "صابون بلدي + كيس تبريم + غسول طبيعي، يُوازن البشرة المختلطة بعمق",
-            "url": f"{STORE_URL}/الحمام-المغربي-من-لافيمينت/c127498338"
-        },
-        {
-            "name": "✨ مجموعة وايت بيل — لافمنيت",
-            "desc": "مجموعة التفتيح الذكي، تفتيح متوازن دون إفراط — غيّرت قواعد التفتيح",
-            "url": f"{STORE_URL}/وايت-بيل/c1616823754"
-        },
-    ],
-    "حساسة": [
-        {
-            "name": "🌸 منتجات العناية بالعين — لافمنيت",
-            "desc": "تركيبة لطيفة خاصة لمنطقة العين الحساسة، تُقلل الهالات والانتفاخ",
-            "url": f"{STORE_URL}/منتجات-العناية-بالعين-من-لافيمينت/c235543399"
-        },
-        {
-            "name": "💋 منتجات العناية بالشفاه — لافمنيت",
-            "desc": "ترطيب عميق للشفاه الجافة والحساسة، مكونات طبيعية 100% آمنة",
-            "url": f"{STORE_URL}/منتجات-العناية-بالشفاه-من-لافيمينت/c416482159"
-        },
-    ],
-    "عادية": [
-        {
-            "name": "🌺 مجموعة وايت بيل — لافمنيت",
-            "desc": "للحفاظ على إشراق بشرتك وتوحيد لونها، تركيبة عضوية مبتكرة",
-            "url": f"{STORE_URL}/وايت-بيل/c1616823754"
-        },
-        {
-            "name": "🫙 زيت التين الشوكي — لافمنيت",
-            "desc": "يُغذي ويُجدد البشرة العادية، يمنحها إشراقاً وصفاءً طبيعياً",
-            "url": f"{STORE_URL}/منتجات-التين-الشوكي-من-لافيمينت/c1289226895"
-        },
-    ],
-    # مشكلة البقع والتفتيح
-    "بقع": [
-        {
-            "name": "🤍 مجموعة النيلة لتفتيح الجسم — لافمنيت",
-            "desc": "صابونة + مقشر + زبدة النيلة، تفتيح ملحوظ من أسبوعين فقط",
-            "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493"
-        },
-        {
-            "name": "🌟 تفتيح المناطق الحساسة والداكنة — لافمنيت",
-            "desc": "مخصص للمناطق الداكنة كالركب والأكواع والإبط، نتائج آمنة وفعّالة",
-            "url": f"{STORE_URL}/تفتيح-المناطق-الحساسة-و-الداكنة/c2069951841"
-        },
-    ],
-}
+# Conversation states
+MAIN_MENU, ASK_PROBLEM, ASK_MORE_PROBLEMS, ASK_PREGNANT, SHOW_RESULT, PRODUCT_INQUIRY = range(6)
 
-ROUTINES = {
-    "جافة": {
-        "صباح": ["1️⃣ غسول لطيف بماء دافئ", "2️⃣ تونر مرطب بماء الورد", "3️⃣ سيروم الهيالورونيك", "4️⃣ مرطب كثيف + واقي شمس SPF50"],
-        "مساء": ["1️⃣ إزالة المكياج بالزيت", "2️⃣ غسول مرطب", "3️⃣ سيروم الليل بالريتينول الطبيعي", "4️⃣ كريم الليل المغذي بزبدة الشيا"],
-    },
-    "دهنية": {
-        "صباح": ["1️⃣ غسول تنظيف عميق بالطين", "2️⃣ تونر مُنظم بحمض الساليسيليك", "3️⃣ سيروم نياسيناميد خفيف", "4️⃣ مرطب جل خفيف + واقي شمس"],
-        "مساء": ["1️⃣ دبل كلينزينج (زيت ثم غسول)", "2️⃣ مقشر كيميائي 2x أسبوعياً", "3️⃣ سيروم تضييق المسام", "4️⃣ مرطب خفيف بدون زيوت"],
-    },
-    "مختلطة": {
-        "صباح": ["1️⃣ غسول معتدل", "2️⃣ تونر ماء الورد", "3️⃣ سيروم خفيف", "4️⃣ مرطب خفيف على الخدين + جل على منطقة T"],
-        "مساء": ["1️⃣ إزالة مكياج كاملة", "2️⃣ غسول لطيف", "3️⃣ ترطيب مختلف للمناطق", "4️⃣ كريم عيون اختياري"],
-    },
-    "حساسة": {
-        "صباح": ["1️⃣ غسول بدون عطور أو كبريتات", "2️⃣ تونر مهدئ بالألوفيرا", "3️⃣ سيروم مهدئ", "4️⃣ مرطب هايبوالرجينيك + واقي معدني"],
-        "مساء": ["1️⃣ إزالة لطيفة بالميسيلار ووتر", "2️⃣ غسول فائق اللطافة", "3️⃣ سيروم الإصلاح الليلي", "4️⃣ كريم بالسيراميد"],
-    },
-    "عادية": {
-        "صباح": ["1️⃣ غسول صباحي", "2️⃣ تونر فيتامين C", "3️⃣ سيروم مضيء", "4️⃣ مرطب خفيف + واقي SPF50"],
-        "مساء": ["1️⃣ تنظيف كامل", "2️⃣ تونر مرطب", "3️⃣ سيروم الريتينول أو النياسيناميد", "4️⃣ مرطب ليلي"],
-    },
-}
+# ── Products Database ─────────────────────────────────────────────────────────
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-async def analyze_skin_with_claude(image_bytes: bytes) -> dict:
-    """Send image to Claude API for skin analysis."""
-    b64 = base64.standard_b64encode(image_bytes).decode()
-    payload = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 1000,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}
-                },
-                {
-                    "type": "text",
-                    "text": """أنت خبير في تحليل البشرة. حلّل هذه الصورة وأجب بـ JSON فقط بدون أي نص إضافي، بهذا الشكل:
-{
-  "skin_type": "جافة أو دهنية أو مختلطة أو حساسة أو عادية",
-  "observations": ["ملاحظة 1", "ملاحظة 2", "ملاحظة 3"],
-  "main_concern": "المشكلة الرئيسية",
-  "positive": "أبرز نقطة إيجابية في البشرة",
-  "confidence": "عالية أو متوسطة أو منخفضة"
-}
-كن دقيقاً ومشجعاً. إذا لم تكن الصورة واضحة اجعل confidence منخفضة."""
-                }
-            ]
-        }]
+PRODUCTS = {
+    "زيت_التين_الشوكي": {
+        "name": "زيت التين الشوكي النقي",
+        "url": f"{STORE_URL}/منتجات-التين-الشوكي-من-لافيمينت/c1289226895",
+        "problems": ["تصبغات", "بقع داكنة", "خطوط دقيقة", "هالات سوداء", "شحوب", "بشرة باهتة", "تجاعيد", "جفاف"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "ضعي 2-3 قطرات على الوجه والرقبة بعد التنظيف، يفضل بالليل. الأسبوع الأول قد تحسين خشونة خفيفة = طبيعي، استمري.",
+        "note": "بديل بوتكس طبيعي، يملأ الخطوط الدقيقة ويعبي الخطوط حول العين. عضوي معصور بارد. شهادة ECOCERT + USDA.",
+        "trio": "ينصح باستخدامه مع صابونة النيلة وماسك النيلة لتصبغات قوية."
+    },
+    "كريم_التين_الشوكي": {
+        "name": "كريم التين الشوكي",
+        "url": f"{STORE_URL}/منتجات-التين-الشوكي-من-لافيمينت/c1289226895",
+        "problems": ["جفاف", "خطوط دقيقة", "تجاعيد", "تفاوت لون", "شحوب", "بشرة دهنية"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "ضعي كمية مناسبة وادلكي بلطف مرتين يومياً. يناسب جميع أنواع البشرة حتى الدهنية. يُستخدم تحت المكياج.",
+        "note": "خالٍ من العطور والكحول. قوام خفيف غير دهني."
+    },
+    "ماء_الورد": {
+        "name": "ماء الورد العضوي",
+        "url": f"{STORE_URL}/منتجات-العناية-بالوجه-و-الرقبة/c1957720090",
+        "problems": ["احمرار وتهيج", "مسام واسعة", "جفاف", "شحوب", "بشرة غير متوازنة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "تونر يومي بعد التنظيف، أو رشه خلال اليوم. يُضاف للماسكات. يُستخدم بعد التقشير لتهدئة البشرة.",
+        "note": "خالٍ من الكحول والعطور الصناعية والمواد الحافظة. شهادة ECOCERT + USDA."
+    },
+    "سيروم_العين": {
+        "name": "سيروم العين للهالات السوداء",
+        "url": f"{STORE_URL}/منتجات-العناية-بالعين-من-لافيمينت/c235543399",
+        "problems": ["هالات سوداء", "انتفاخ تحت العين", "خطوط العين", "جفاف منطقة العين"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "نقطة صغيرة حول كل عين بإصبع الخاتم من الداخل للخارج. انتظري 2-3 دقائق قبل أي منتج آخر.",
+        "note": "كافيين + زيت التين الشوكي + فيتامين C + هيالورونيك + ببتيدات. خالٍ من العطور والكحول."
+    },
+    "سيروم_الرموش": {
+        "name": "سيروم الرموش والحواجب",
+        "url": f"{STORE_URL}/منتجات-العناية-بالعين-من-لافيمينت/c235543399",
+        "problems": ["رموش خفيفة وقصيرة", "رموش متساقطة", "حواجب فاتحة ومتفرقة", "بطء نمو الرموش والحواجب"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "للرموش: على خط الرموش مساءً قبل النوم. للحواجب: صباحاً ومساءً باتجاه نمو الشعر. النتائج الأولى بعد 15 يوم.",
+        "note": "مستخلص بذور التين الشوكي 25% + بيوتين 2% + كيراتين. خالٍ من البارابين والكحول."
+    },
+    "صابونة_النيلة": {
+        "name": "صابونة النيلة الزرقاء",
+        "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493",
+        "problems": ["تصبغات", "بقع داكنة", "مسام واسعة", "تفاوت لون", "حبوب وبثور", "آثار حبوب", "حبوب المراهقة"],
+        "pregnant_safe": True,
+        "sensitive_safe": False,
+        "usage": "مرتين يومياً صباحاً ومساءً (بديل الغسول). اتركي الرغوة دقيقة إلى خمس دقائق. ليلاً بعدها زيت أو كريم التين الشوكي. صباحاً بعدها واقي شمس.",
+        "note": "الأسبوع الأول: خشونة خفيفة = طبيعي = تقشير من الداخل، استمري. قد تسبب purging في البداية وهذا طبيعي. تناسب الجسم والبشرة. لا تناسب الأطفال.",
+        "trio": "تعمل مع زيت التين الشوكي وماسك النيلة لتصبغات قوية."
+    },
+    "مقشر_النيلة": {
+        "name": "مقشر النيلة الزرقاء",
+        "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493",
+        "problems": ["تصبغات", "بقع داكنة", "خلايا ميتة", "داكنة الركب والأكواع", "بشرة باهتة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "بللي البشرة بالماء الدافئ، دلكي بحركات دائرية، اشطفي بالماء الفاتر. 2-3 مرات أسبوعياً.",
+        "note": "نتائج فورية من أول استخدام. مناسب للوجه والجسم والمناطق الحساسة. اللون الباقي على الجلد طبيعي يزول بالغسيل."
+    },
+    "ماسك_النيلة": {
+        "name": "ماسك النيلة لتفتيح البشرة",
+        "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493",
+        "problems": ["تصبغات", "كلف", "بقع الشمس", "آثار حبوب", "مسام واسعة", "بشرة باهتة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "اغسلي وجهك، ضعي منشفة دافئة دقيقتين لفتح المسام، وزعي الماسك على الوجه والرقبة مع تجنب العين والشفاه، اتركي 15-20 دقيقة، اغسلي بماء بارد، رطبي بعدها.",
+        "note": "اللذعات البسيطة أثناء الاستخدام طبيعية = الماسك يتفاعل بشكل صحيح. يفتح من أول استخدام بشكل قوي جداً لاحتوائه على الطين الأبيض المقشر الطبيعي.",
+        "trio": "يعمل مع زيت التين الشوكي وصابونة النيلة للثلاثي الذهبي لتصبغات قوية."
+    },
+    "غسول_النيلة": {
+        "name": "غسول النيلة الزرقاء للجسم",
+        "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493",
+        "problems": ["تفاوت لون الجسم", "داكنة الركب والأكواع", "جفاف الجسم", "بشرة باهتة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "بللي جسمك بالماء الدافئ، وزعي بحركات دائرية، اتركي دقيقة كاملة، اشطفي بالماء الفاتر. يومياً.",
+        "note": "نيلة مغربية + زيت الأرجان + كولاجين. يناسب جميع أنواع البشرة حتى الحساسة."
+    },
+    "بودرة_النيلة": {
+        "name": "بودرة النيلة الزرقاء",
+        "url": f"{STORE_URL}/منتجات-النيلة-من-لافيمينت/c418743493",
+        "problems": ["تصبغات", "بقع داكنة", "شحوب", "تفاوت لون"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "امزجي كمية مناسبة مع ماء الورد أو الحليب حتى تحصلي على قوام كريمي، ضعي على الوجه أو الجسم، اتركي 20 دقيقة، اغسلي بالماء الفاتر، رطبي بعدها. مرتين أسبوعياً.",
+        "note": "مناسب للوجه والجسم وحتى البشرة الحساسة."
+    },
+    "مقشر_عكر_فاسي": {
+        "name": "مقشر العكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العكر-الفاسي-من-لافيمينت/c424452352",
+        "problems": ["خلايا ميتة", "خشونة البشرة", "جلد الدجاجة", "بشرة باهتة", "تفاوت لون"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "بللي البشرة، دلكي بلطف وركزي على الأماكن الخشنة، اغسلي بالماء الفاتر، رطبي بزبدة العكر الفاسي بعدها. 2-3 مرات أسبوعياً.",
+        "note": "نتائج فورية من أول استخدام. مناسب لجميع أنواع البشرة حتى الحساسة."
+    },
+    "زبدة_عكر_فاسي": {
+        "name": "زبدة الجسم بالعكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العكر-الفاسي-من-لافيمينت/c424452352",
+        "problems": ["جفاف الجسم", "علامات تمدد", "خطوط بيضاء", "إكزيما", "تفاوت لون الجسم"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "بعد الاستحمام مباشرة أو قبل النوم، ضعي كمية مناسبة ودلكي بلطف حتى تمتص. يومياً.",
+        "note": "ترطيب يدوم 72 ساعة. إذا وصلتكِ سائلة ضعيها في الثلاجة وستعود لقوامها."
+    },
+    "زيت_الارغان": {
+        "name": "زيت الأرغان للجسم",
+        "url": f"{STORE_URL}/منتجات-العكر-الفاسي-من-لافيمينت/c424452352",
+        "problems": ["جفاف الجسم الشديد", "علامات تمدد", "خشونة اليدين والقدمين", "بشرة باهتة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "بعد الاستحمام مباشرة أو قبل النوم. يُستخدم علاجاً مكثفاً لليدين والقدمين.",
+        "note": "ترطيب يدوم 72 ساعة. زيت الأرغان + زيت الورد + زيت بذور العنب."
+    },
+    "مجموعة_وايت_بيل": {
+        "name": "مجموعة وايت بيل",
+        "url": f"{STORE_URL}/وايت-بيل/c1616823754",
+        "problems": ["تصبغات قوية", "اسمرار الجسم", "داكنة الركب والأكواع", "آثار الشمس", "تفاوت لون الجسم"],
+        "pregnant_safe": False,
+        "sensitive_safe": False,
+        "usage": "الروتين الكامل: غسول ← مقشر ← كريم (يومياً) + ماسك (أسبوعياً). واقي شمس للجسم نهاراً ضروري.",
+        "note": "قنبلة التفتيح — كوجيك أسيد + ألفا أربوتين + عرق سوس + لبان ذكر + كركم + زعفران. لا تناسب الحوامل والمرضعات."
+    },
+    "كريم_مناطق_داكنة": {
+        "name": "كريم تفتيح المناطق الداكنة (الركب والأكواع)",
+        "url": f"{STORE_URL}/تفتيح-المناطق-الحساسة-و-الداكنة/c2069951841",
+        "problems": ["داكنة الركب والأكواع", "خشونة المفاصل", "تصبغات الاحتكاك"],
+        "pregnant_safe": False,
+        "sensitive_safe": True,
+        "usage": "نظفي المنطقة وجففيها، ضعي كمية مناسبة، مرتين يومياً صباحاً ومساءً. ادمجيه مع مقشر العكر الفاسي لنتائج مضاعفة.",
+        "note": "نعومة من أول استخدام، تفتيح واضح خلال 14 يوم. عرق السوس + يوريا + حمض الساليسيليك."
+    },
+    "كريم_مناطق_حساسة": {
+        "name": "كريم تفتيح المناطق الحساسة",
+        "url": f"{STORE_URL}/تفتيح-المناطق-الحساسة-و-الداكنة/c2069951841",
+        "problems": ["اسمرار المناطق الحساسة", "حبوب المناطق الحساسة", "خشونة المناطق الحساسة"],
+        "pregnant_safe": False,
+        "sensitive_safe": True,
+        "usage": "اغسلي المنطقة بصابونة العرق سوس، جففي بلطف، ضعي كمية مناسبة واتركي دون غسل. مرتين يومياً.",
+        "note": "نتائج أقل من شهر. لا تناسب الحوامل نهائياً."
+    },
+    "صابونة_مناطق_حساسة": {
+        "name": "صابونة تفتيح المناطق الحساسة",
+        "url": f"{STORE_URL}/تفتيح-المناطق-الحساسة-و-الداكنة/c2069951841",
+        "problems": ["اسمرار المناطق الحساسة", "بقع داكنة في المناطق الحساسة"],
+        "pregnant_safe": False,
+        "sensitive_safe": True,
+        "usage": "بللي يديكِ، كوّني رغوة مناسبة، وزعي على المنطقة الحساسة بلطف، دلكي برفق ثم اشطفي. مرة واحدة مساءً فقط.",
+        "note": "نتائج أقل من شهر. لا تناسب الحوامل والمرضعات."
+    },
+    "تبريمة_العروس": {
+        "name": "تبريمة العروس المغربية",
+        "url": f"{STORE_URL}/الحمام-المغربي-من-لافيمينت/c127498338",
+        "problems": ["تصبغات", "اسمرار البشرة", "كلف", "خلايا ميتة", "جفاف", "بشرة باهتة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "الطريقة 1 (الحمام المغربي): حمام دافئ بخار + صابون مغربي + تبريمة 20 دقيقة + اشطفي + طبطبي فقط + زيت الأرغان. الطريقة 2: زبادي + بيضة + ليمون + 3-4 ملاعق تبريمة، 30 دقيقة، كرري 3 أيام واليوم الرابع حمام مغربي.",
+        "note": "عرق سوس + نيلة + ودع + عكر فاسي + شيح + سدر + كركم."
+    },
+    "بدلة_الساونا": {
+        "name": "بدلة الساونا الحرارية",
+        "url": f"{STORE_URL}/بدله-الساونا/c1234567890",
+        "problems": ["ترهل الجسم", "سيلوليت", "تسريع نتائج خلطات الجسم"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "أولاً: وزعي زيت لافمنيت أو الزبدة على جسمكِ. ثانياً: البسي البدلة (القطعة العلوية والسفلية) لتغلغل الترطيب وفتح المسامات. ثالثاً: تحركي 20 دقيقة أو ساعة (مشي خفيف أو نشاط رياضي) والبدلة تحبس الحرارة وترفع التعرق. يفضل خلال الاستخدام مقشر وليفة بحركات دائرية. لا تستخدمي أثناء الشاور أي ماسك مقشر وغسول. أخيراً: رطبي بشرتك بعد التقشير. اشربي ماء كافي قبل وبعد كل جلسة. داومي أسبوعياً لأفضل نتيجة.",
+        "note": "تخصر الجسم دون التأثير على الأرداف. خامة 100% بولي يوريثان."
+    },
+    "حجر_خفاف": {
+        "name": "حجر الخفاف",
+        "url": f"{STORE_URL}/منتجات-العناية-بالوجه-و-الرقبة/c1957720090",
+        "problems": ["خشونة القدمين والكعبين", "تشققات القدمين", "جلد ميت متراكم", "خشونة الركب والمرافق"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "انقعي القدمين في ماء دافئ 5-10 دقائق، بللي الحجر، افركي بحركات دائرية، ركزي على الكعبين، اشطفي وجففي، ضعي مرطب بعدها.",
+        "note": "صناعة يدوية مغربية. بدّليه كل 3-6 أشهر."
+    },
+    "صقلة_مغربية": {
+        "name": "الصقلة المغربية",
+        "url": f"{STORE_URL}/الحمام-المغربي-من-لافيمينت/c127498338",
+        "problems": ["خشونة الجلد", "خلايا ميتة", "تصبغات", "آثار حبوب", "بشرة باهتة"],
+        "pregnant_safe": False,
+        "sensitive_safe": True,
+        "usage": "نظفي البشرة بالماء الفاتر، عرضي لبخار خفيف لفتح المسام، اخلطي كمية مع القليل من الماء، وزعي طبقة رقيقة، اتركي 15-20 دقيقة، افركي بلطف بحركات دائرية، اشطفي جيداً. مرة إلى مرتين أسبوعياً.",
+        "note": "نعومة ونظافة من أول استخدام. لا تناسب الحوامل (كوجيك أسيد)."
+    },
+    "صابون_مغربي": {
+        "name": "الصابون المغربي",
+        "url": f"{STORE_URL}/الحمام-المغربي-من-لافيمينت/c127498338",
+        "problems": ["جفاف الجسم", "بشرة باهتة", "تفاوت لون"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "رطبي البشرة بالماء الدافئ، ضعي كمية مناسبة ودلكي بلطف، اتركي بضع دقائق، افركي بالليفة المغربية الأصلية، اشطفي وجففي بلطف.",
+        "note": "أوكالبتوس. أساس الحمام المغربي."
+    },
+    "ليفة_مغربية": {
+        "name": "الليفة المغربية",
+        "url": f"{STORE_URL}/الحمام-المغربي-من-لافيمينت/c127498338",
+        "problems": ["خلايا ميتة", "خشونة الجسم", "سيلوليت"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "اجلسي في حمام دافئ 5-10 دقائق، ضعي الصابون المغربي واتركيه بضع دقائق، بللي الليفة وافركي بحركات دائرية لطيفة، اشطفي، رطبي بعدها. مرة إلى مرتين أسبوعياً.",
+        "note": "بدّليها كل 3-6 أشهر. جففيها جيداً بعد كل استخدام."
+    },
+    "مورد_خدود": {
+        "name": "مورد الخدود والشفاه بالعكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العناية-بالشفاه-من-لافيمينت/c416482159",
+        "problems": ["شحوب الخدود", "شحوب الشفاه"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "رجي العبوة جيداً، ضعي بضع نقاط على تفاحة الخدين ومنتصف الشفاه، دمجي بأطراف الأصابع بطبطبة سريعة قبل أن يجف. ضعي مرطبك قبله بـ5 دقائق للحصول على أفضل توزيع.",
+        "note": "خالٍ من أصباغ صناعية وسيليكون وبارابين وكحول. آمن للبشرة الدهنية."
+    },
+    "مرطب_شفاه": {
+        "name": "مرطب الشفاه بالعكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العناية-بالشفاه-من-لافيمينت/c416482159",
+        "problems": ["شفاه جافة ومتشققة", "شحوب الشفاه"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "خذي كمية صغيرة بطرف إصبعك، ضعي بلطف ووزعي بالتساوي. يومياً.",
+        "note": "عكر فاسي + زبدة الشيا + زيت اللوز الحلو + فيتامين E. لون وردي طبيعي."
+    },
+    "مقشر_شفاه_عكر": {
+        "name": "مقشر الشفاه بالعكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العناية-بالشفاه-من-لافيمينت/c416482159",
+        "problems": ["شفاه داكنة", "خشونة الشفاه", "شفاه جافة ومتشققة", "سواد حول الفم"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "ضعي كمية مناسبة على الشفاه، دلكي بلطف بحركات دائرية، اتركي بضع دقائق، اشطفي بلطف، ضعي مرطب الشفاه بعدها. 2-3 مرات أسبوعياً.",
+        "note": "يترك توريداً طبيعياً رقيقاً يدوم بعد الاستخدام. استخدميه قبل أحمر الشفاه لمظهر مخملي."
+    },
+    "مقشر_شفاه_حمضيات": {
+        "name": "مقشر الشفاه بالحمضيات",
+        "url": f"{STORE_URL}/منتجات-العناية-بالشفاه-من-لافيمينت/c416482159",
+        "problems": ["شفاه جافة ومتشققة", "شفاه داكنة", "خشونة الشفاه"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "ضعي كمية مناسبة على الشفاه النظيفة، اتركي 5-10 دقائق، اشطفي بلطف، ضعي مرطب الشفاه بالعكر الفاسي بعدها. 2-3 مرات أسبوعياً.",
+        "note": "فيتامين C + عسل المانوكا النيوزلندي + زبدة الشيا + زيت الأرجان. آمن للحوامل والمرضعات."
+    },
+    "حجر_عكر_فاسي": {
+        "name": "حجر العكر الفاسي",
+        "url": f"{STORE_URL}/منتجات-العكر-الفاسي-من-لافيمينت/c424452352",
+        "problems": ["شحوب الخدود", "خلطات العناية بالبشرة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "خذي كمية بسيطة، اخلطي مع ماء الورد أو ماء عادي، ضعي على المنطقة المرغوبة، اتركي فترة قصيرة ثم اشطفي.",
+        "note": "تأثير مؤقت يزول مع الغسل. ليس للاستخدام اليومي المفرط."
+    },
+    "جواشا": {
+        "name": "حجر الجواشا",
+        "url": f"{STORE_URL}/منتجات-العناية-بالوجه-و-الرقبة/c1957720090",
+        "problems": ["تجاعيد", "خطوط دقيقة", "بشرة متعبة"],
+        "pregnant_safe": True,
+        "sensitive_safe": True,
+        "usage": "نظفي البشرة بصابونة النيلة، ضعي زيت التين الشوكي أو سيروم العين، حركي الحجر من الأسفل للأعلى بضغطات صغيرة 10 دقائق. عدة مرات أسبوعياً.",
+        "note": "احفظيه في الثلاجة لتعزيز فعاليته."
     }
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json=payload
-        )
-        resp.raise_for_status()
-        text = resp.json()["content"][0]["text"].strip()
-        text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
+}
 
+# ── Problem to Products Mapping ───────────────────────────────────────────────
 
-def build_skin_keyboard():
+PROBLEM_PRODUCTS = {
+    # وجه
+    "بشرة جافة": ["كريم_التين_الشوكي", "زيت_التين_الشوكي", "ماء_الورد", "زبدة_عكر_فاسي"],
+    "بشرة دهنية": ["صابونة_النيلة", "ماء_الورد", "كريم_التين_الشوكي"],
+    "بشرة مختلطة": ["ماء_الورد", "صابونة_النيلة", "كريم_التين_الشوكي"],
+    "بشرة حساسة": ["ماء_الورد", "مقشر_عكر_فاسي", "كريم_التين_الشوكي"],
+    "حبوب وبثور": ["صابونة_النيلة", "ماء_الورد"],
+    "آثار حبوب": ["ماسك_النيلة", "زيت_التين_الشوكي", "صقلة_مغربية"],
+    "مسام واسعة": ["ماسك_النيلة", "صابونة_النيلة", "ماء_الورد"],
+    "بقع داكنة وتصبغات": ["زيت_التين_الشوكي", "صابونة_النيلة", "ماسك_النيلة"],
+    "شحوب وإرهاق البشرة": ["زيت_التين_الشوكي", "ماسك_النيلة", "ماء_الورد"],
+    "احمرار وتهيج": ["ماء_الورد", "كريم_التين_الشوكي"],
+    "خطوط دقيقة": ["زيت_التين_الشوكي", "جواشا", "سيروم_العين"],
+    "تجاعيد": ["زيت_التين_الشوكي", "جواشا", "كريم_التين_الشوكي"],
+    "خشونة البشرة": ["مقشر_عكر_فاسي", "صقلة_مغربية"],
+    "بشرة باهتة بلا إشراق": ["زيت_التين_الشوكي", "ماسك_النيلة", "صابونة_النيلة"],
+    # عيون
+    "هالات سوداء": ["سيروم_العين", "زيت_التين_الشوكي"],
+    "انتفاخ تحت العين": ["سيروم_العين"],
+    "خطوط العين": ["سيروم_العين", "زيت_التين_الشوكي", "جواشا"],
+    "جفاف منطقة العين": ["سيروم_العين"],
+    # جسم
+    "جفاف الجسم الشديد": ["زبدة_عكر_فاسي", "زيت_الارغان", "غسول_النيلة"],
+    "جلد الدجاجة": ["مقشر_عكر_فاسي", "زيت_الارغان"],
+    "خشونة الجلد وتقشره": ["مقشر_عكر_فاسي", "صقلة_مغربية", "حجر_خفاف"],
+    "سيلوليت": ["بدلة_الساونا", "ليفة_مغربية"],
+    "علامات تمدد": ["زيت_الارغان", "زبدة_عكر_فاسي"],
+    "حبوب الظهر": ["صابونة_النيلة", "صابون_مغربي"],
+    "داكنة الركب والأكواع": ["كريم_مناطق_داكنة", "مقشر_عكر_فاسي", "مجموعة_وايت_بيل"],
+    "داكنة الإبطين": ["كريم_مناطق_حساسة", "صابونة_مناطق_حساسة"],
+    "داكنة الفخذين": ["كريم_مناطق_حساسة", "صابونة_مناطق_حساسة"],
+    # مناطق حساسة
+    "اسمرار المناطق الحساسة": ["كريم_مناطق_حساسة", "صابونة_مناطق_حساسة"],
+    "حبوب المناطق الحساسة": ["صابونة_مناطق_حساسة", "كريم_مناطق_حساسة"],
+    "خشونة المناطق الحساسة": ["كريم_مناطق_حساسة", "صابونة_مناطق_حساسة"],
+    "تهيج المناطق الحساسة": ["كريم_مناطق_حساسة"],
+    # شفاه
+    "شفاه جافة ومتشققة": ["مرطب_شفاه", "مقشر_شفاه_حمضيات", "مقشر_شفاه_عكر"],
+    "شفاه داكنة": ["مقشر_شفاه_عكر", "مقشر_شفاه_حمضيات", "مرطب_شفاه"],
+    "خشونة الشفاه": ["مقشر_شفاه_عكر", "مقشر_شفاه_حمضيات"],
+    "شحوب الشفاه": ["مورد_خدود", "مرطب_شفاه"],
+    # رموش وحواجب
+    "رموش خفيفة وقصيرة": ["سيروم_الرموش"],
+    "رموش متساقطة": ["سيروم_الرموش"],
+    "حواجب فاتحة ومتفرقة": ["سيروم_الرموش"],
+    "بطء نمو الرموش والحواجب": ["سيروم_الرموش"],
+}
+
+ALL_PROBLEMS = list(PROBLEM_PRODUCTS.keys())
+
+# ── Keyboards ─────────────────────────────────────────────────────────────────
+
+def main_menu_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("🌿 تحليل بشرتي مع أخصائية لافمنيت")],
+            [KeyboardButton("💬 استفسار عن منتج")]
+        ],
+        resize_keyboard=True
+    )
+
+def problems_keyboard(page=0, selected=[]):
+    problems_per_page = 8
+    start = page * problems_per_page
+    end = start + problems_per_page
+    page_problems = ALL_PROBLEMS[start:end]
+    buttons = []
+    for i in range(0, len(page_problems), 2):
+        row = []
+        p1 = page_problems[i]
+        check1 = "✅ " if p1 in selected else ""
+        row.append(InlineKeyboardButton(f"{check1}{p1}", callback_data=f"prob_{p1}"))
+        if i + 1 < len(page_problems):
+            p2 = page_problems[i + 1]
+            check2 = "✅ " if p2 in selected else ""
+            row.append(InlineKeyboardButton(f"{check2}{p2}", callback_data=f"prob_{p2}"))
+        buttons.append(row)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ السابق", callback_data=f"page_{page-1}"))
+    if end < len(ALL_PROBLEMS):
+        nav.append(InlineKeyboardButton("التالي ➡️", callback_data=f"page_{page+1}"))
+    if nav:
+        buttons.append(nav)
+    if selected:
+        buttons.append([InlineKeyboardButton("✅ تم الاختيار — أكملي", callback_data="done_problems")])
+    return InlineKeyboardMarkup(buttons)
+
+def pregnant_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌵 جافة", callback_data="skin_جافة"),
-         InlineKeyboardButton("💦 دهنية", callback_data="skin_دهنية")],
-        [InlineKeyboardButton("⚖️ مختلطة", callback_data="skin_مختلطة"),
-         InlineKeyboardButton("🌸 حساسة", callback_data="skin_حساسة")],
-        [InlineKeyboardButton("✨ عادية", callback_data="skin_عادية")],
+        [InlineKeyboardButton("🤰 نعم، حامل أو مرضع", callback_data="pregnant_yes")],
+        [InlineKeyboardButton("❌ لا", callback_data="pregnant_no")]
     ])
-
-
-def build_concern_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔴 حب الشباب", callback_data="concern_حب الشباب"),
-         InlineKeyboardButton("💧 الجفاف الشديد", callback_data="concern_الجفاف")],
-        [InlineKeyboardButton("🌑 البقع الداكنة", callback_data="concern_البقع"),
-         InlineKeyboardButton("⚡ التهيج والاحمرار", callback_data="concern_التهيج")],
-        [InlineKeyboardButton("🕐 الشيخوخة المبكرة", callback_data="concern_الشيخوخة"),
-         InlineKeyboardButton("😐 لا توجد مشكلة محددة", callback_data="concern_لا شيء")],
-    ])
-
-
-def build_climate_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌅 الرياض / جو حار جاف", callback_data="climate_حار_جاف"),
-         InlineKeyboardButton("🌊 جدة / حار رطب", callback_data="climate_حار_رطب")],
-        [InlineKeyboardButton("🏔️ الطائف / معتدل", callback_data="climate_معتدل"),
-         InlineKeyboardButton("🌍 منطقة أخرى", callback_data="climate_أخرى")],
-    ])
-
-
-def build_budget_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💚 100–200 ريال/شهر", callback_data="budget_اقتصادي"),
-         InlineKeyboardButton("💛 200–400 ريال/شهر", callback_data="budget_متوسط")],
-        [InlineKeyboardButton("💎 400+ ريال/شهر", callback_data="budget_مميز")],
-    ])
-
-
-async def build_final_report(context: ContextTypes.DEFAULT_TYPE) -> str:
-    d = context.user_data
-    skin = d.get("skin_type", "عادية")
-    concern = d.get("concern", "لا شيء")
-    climate = d.get("climate", "حار_جاف")
-    budget = d.get("budget", "متوسط")
-    ai_obs = d.get("ai_observations", [])
-    ai_positive = d.get("ai_positive", "")
-    ai_concern = d.get("ai_main_concern", "")
-
-    routine = ROUTINES.get(skin, ROUTINES["عادية"])
-    products = LAVMNITE_PRODUCTS.get(skin, LAVMNITE_PRODUCTS["عادية"])
-
-    climate_tip = {
-        "حار_جاف": "⚠️ مناخك حار وجاف — ركّزي على الترطيب المكثف وواقي الشمس يومياً حتى في الغيم.",
-        "حار_رطب": "⚠️ مناخك حار ورطب — اختاري منتجات خفيفة غير دهنية لتجنب انسداد المسام.",
-        "معتدل": "✅ مناخك معتدل نسبياً — الروتين الأساسي سيكفيك مع تعديلات بسيطة صيفاً.",
-        "أخرى": "📍 راعي خصائص مناخك المحلي عند اختيار درجة الترطيب.",
-    }.get(climate, "")
-
-    obs_text = "\n".join([f"• {o}" for o in ai_obs]) if ai_obs else "• تحليل بناءً على إجاباتك"
-    ai_section = ""
-    if ai_obs:
-        ai_section = f"""
-━━━━━━━━━━━━━━━━━━━━
-🔬 **ما لاحظه الذكاء الاصطناعي في صورتك:**
-{obs_text}
-{'✅ ' + ai_positive if ai_positive else ''}
-{'⚠️ أبرز مشكلة: ' + ai_concern if ai_concern else ''}
-"""
-
-    products_text = "\n".join([f"🛍️ **{p['name']}**\n   _{p['desc']}_\n   🔗 {p['url']}" for p in products])
-
-    # Add concern-specific products for dark spots
-    extra_products = ""
-    if concern in ["البقع", "التفتيح"]:
-        bq = LAVMNITE_PRODUCTS.get("بقع", [])
-        extra = "\n".join([f"🛍️ **{p['name']}**\n   _{p['desc']}_\n   🔗 {p['url']}" for p in bq])
-        extra_products = f"\n💡 **بما أن مشكلتك البقع الداكنة، ننصحك أيضاً بـ:**\n{extra}\n"
-    morning = "\n".join(routine["صباح"])
-    night = "\n".join(routine["مساء"])
-
-    report = f"""
-✨ **تقريرك الشخصي — لافمنيت للعناية**
-━━━━━━━━━━━━━━━━━━━━
-🧬 **نوع بشرتك:** {skin}
-🎯 **مشكلتك الرئيسية:** {concern}
-{climate_tip}
-{ai_section}
-━━━━━━━━━━━━━━━━━━━━
-☀️ **روتين الصباح (4 دقائق):**
-{morning}
-
-🌙 **روتين المساء (5 دقائق):**
-{night}
-
-━━━━━━━━━━━━━━━━━━━━
-🛒 **منتجات لافمنيت المناسبة لكِ:**
-{products_text}
-{extra_products}
-━━━━━━━━━━━━━━━━━━━━
-💡 **نصيحة الأسبوع:**
-لا تغيري أكثر من منتج واحد في الأسبوع حتى تعرفي ما يناسب بشرتك فعلاً.
-
-🛍️ **تسوقي الآن:** https://lafeminite1.com/ar
-📲 **لأي استفسار:** تواصلي معنا عبر المتجر مباشرة
-"""
-    return report.strip()
-
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📸 تحليل بشرتي بالذكاء الاصطناعي")],
-         [KeyboardButton("❓ أسئلة فقط (بدون صورة)")]],
-        resize_keyboard=True
-    )
     await update.message.reply_text(
         "🌿 *أهلاً بكِ في بوت لافمنيت للعناية الطبيعية*\n\n"
-        "أنا هنا لأحلل بشرتك وأعطيكِ روتيناً مخصصاً 100% لكِ 💚\n\n"
-        "اختاري كيف تريدين البدء:",
+        "أنا أخصائية البشرة من لافمنيت 💚\n"
+        "كيف أقدر أساعدك اليوم؟",
         parse_mode="Markdown",
-        reply_markup=keyboard
+        reply_markup=main_menu_keyboard()
     )
-    return WAITING_PHOTO
+    return MAIN_MENU
 
-
-async def handle_photo_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if "تحليل" in text:
+        context.user_data["selected_problems"] = []
+        context.user_data["page"] = 0
         await update.message.reply_text(
-            "📸 *أرسلي صورة واضحة لوجهك في ضوء طبيعي*\n\n"
-            "💡 نصائح للصورة المثالية:\n"
-            "• ضوء طبيعي (قرب النافذة)\n"
-            "• بدون مكياج إن أمكن\n"
-            "• الوجه كاملاً في الإطار\n\n"
-            "_سيتم تحليل صورتك بالذكاء الاصطناعي وحذفها فوراً_ 🔒",
+            "💆‍♀️ *تحليل البشرة مع أخصائية لافمنيت*\n\n"
+            "اختاري مشكلتك أو مشاكلك من القائمة 👇\n"
+            "_(يمكنك اختيار أكثر من مشكلة)_",
+            parse_mode="Markdown",
+            reply_markup=problems_keyboard(0, [])
+        )
+        return ASK_PROBLEM
+    elif "استفسار" in text:
+        await update.message.reply_text(
+            "💬 *استفساراتك عن منتجات لافمنيت*\n\n"
+            "اكتبي سؤالك وسأجيبك مباشرة 🌿\n\n"
+            "مثال: كيف أستخدم صابونة النيلة؟ هل زيت التين مناسب للحامل؟",
             parse_mode="Markdown"
         )
-        return WAITING_PHOTO
-    else:
-        await update.message.reply_text(
-            "تمام! سنبدأ بأسئلة سريعة 🌿",
-            reply_markup=build_skin_keyboard()
-        )
-        await update.message.reply_text("1️⃣ *ما نوع بشرتك في العادة؟*", parse_mode="Markdown")
-        return ASK_Q1
+        return PRODUCT_INQUIRY
+    return MAIN_MENU
 
+async def handle_problem_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    selected = context.user_data.get("selected_problems", [])
+    page = context.user_data.get("page", 0)
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ *جاري تحليل بشرتك بالذكاء الاصطناعي...*\nانتظري ثوانٍ قليلة 🔬", parse_mode="Markdown")
-    try:
-        photo = update.message.photo[-1]
-        file = await photo.get_file()
-        image_bytes = await file.download_as_bytearray()
-        result = await analyze_skin_with_claude(bytes(image_bytes))
-        context.user_data["skin_type"] = result.get("skin_type", "عادية")
-        context.user_data["ai_observations"] = result.get("observations", [])
-        context.user_data["ai_main_concern"] = result.get("main_concern", "")
-        context.user_data["ai_positive"] = result.get("positive", "")
-        confidence = result.get("confidence", "متوسطة")
-        conf_msg = {"عالية": "✅ التحليل دقيق جداً", "متوسطة": "👍 التحليل جيد", "منخفضة": "⚠️ الصورة غير واضحة تماماً، سنكمل بالأسئلة"}.get(confidence, "")
-        await update.message.reply_text(
-            f"🎯 *نتيجة التحليل الأولي:*\n"
-            f"نوع بشرتك: **{context.user_data['skin_type']}**\n{conf_msg}\n\n"
-            f"الآن سنكمل 3 أسئلة سريعة لنخصص توصياتك أكثر 💚",
+    if data.startswith("prob_"):
+        prob = data[5:]
+        if prob in selected:
+            selected.remove(prob)
+        else:
+            selected.append(prob)
+        context.user_data["selected_problems"] = selected
+        await query.edit_message_reply_markup(reply_markup=problems_keyboard(page, selected))
+
+    elif data.startswith("page_"):
+        page = int(data[5:])
+        context.user_data["page"] = page
+        await query.edit_message_reply_markup(reply_markup=problems_keyboard(page, selected))
+
+    elif data == "done_problems":
+        if not selected:
+            await query.answer("اختاري مشكلة واحدة على الأقل!", show_alert=True)
+            return ASK_PROBLEM
+        await query.edit_message_text(
+            f"✅ اخترتِ: {', '.join(selected)}\n\n"
+            "سؤال أخير 🤰",
             parse_mode="Markdown"
         )
-    except Exception as e:
-        logger.error(f"Image analysis error: {e}")
-        await update.message.reply_text("⚠️ لم أتمكن من تحليل الصورة، سنكمل بالأسئلة فقط.")
-        context.user_data["skin_type"] = None
+        await query.message.reply_text(
+            "هل أنتِ حامل أو مرضع؟",
+            reply_markup=pregnant_keyboard()
+        )
+        return ASK_PREGNANT
 
-    await update.message.reply_text("1️⃣ *ما نوع بشرتك في العادة؟*\n_(يمكنك تأكيد أو تعديل نتيجة التحليل)_", parse_mode="Markdown", reply_markup=build_skin_keyboard())
-    return ASK_Q1
+    return ASK_PROBLEM
 
-
-async def handle_q1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_pregnant(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    skin = query.data.replace("skin_", "")
-    context.user_data["skin_type"] = skin
-    await query.edit_message_text(f"✅ بشرتك: *{skin}*", parse_mode="Markdown")
-    await query.message.reply_text("2️⃣ *ما أبرز مشكلة تزعجكِ في بشرتك؟*", parse_mode="Markdown", reply_markup=build_concern_keyboard())
-    return ASK_Q2
-
-
-async def handle_q2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    concern = query.data.replace("concern_", "")
-    context.user_data["concern"] = concern
-    await query.edit_message_text(f"✅ المشكلة الرئيسية: *{concern}*", parse_mode="Markdown")
-    await query.message.reply_text("3️⃣ *في أي منطقة تعيشين؟* (يؤثر المناخ كثيراً على البشرة)", parse_mode="Markdown", reply_markup=build_climate_keyboard())
-    return ASK_Q3
-
-
-async def handle_q3(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    climate = query.data.replace("climate_", "")
-    context.user_data["climate"] = climate
-    await query.edit_message_text(f"✅ منطقتك: *{climate.replace('_', ' ')}*", parse_mode="Markdown")
-    await query.message.reply_text("4️⃣ *ما ميزانيتك الشهرية للعناية؟*", parse_mode="Markdown", reply_markup=build_budget_keyboard())
-    return ASK_Q4
-
-
-async def handle_q4(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    budget = query.data.replace("budget_", "")
-    context.user_data["budget"] = budget
-    await query.edit_message_text(f"✅ الميزانية: *{budget}*", parse_mode="Markdown")
-    await query.message.reply_text("⏳ *جاري إعداد تقريرك الشخصي...*", parse_mode="Markdown")
-    report = await build_final_report(context)
-    restart_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 تحليل جديد", callback_data="restart")]])
+    pregnant = query.data == "pregnant_yes"
+    context.user_data["pregnant"] = pregnant
+    await query.edit_message_text(
+        "⏳ جاري تحضير توصياتك الشخصية..."
+    )
+    report = build_recommendations(context)
+    restart_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 تحليل جديد", callback_data="restart")],
+        [InlineKeyboardButton("💬 استفسار عن منتج", callback_data="inquiry")]
+    ])
     await query.message.reply_text(report, parse_mode="Markdown", reply_markup=restart_kb)
     return SHOW_RESULT
 
+def build_recommendations(context):
+    selected = context.user_data.get("selected_problems", [])
+    pregnant = context.user_data.get("pregnant", False)
+    recommended = {}
+    for prob in selected:
+        prod_keys = PROBLEM_PRODUCTS.get(prob, [])
+        for key in prod_keys:
+            if key not in recommended:
+                recommended[key] = []
+            recommended[key].append(prob)
+
+    # Filter for pregnant
+    if pregnant:
+        safe_recommended = {k: v for k, v in recommended.items() if PRODUCTS[k]["pregnant_safe"]}
+    else:
+        safe_recommended = recommended
+
+    if not safe_recommended:
+        return "⚠️ لم نجد منتجات مناسبة لمشاكلك مع مراعاة حالتك. تواصلي معنا مباشرة عبر المتجر للمساعدة."
+
+    # Sort by number of problems solved
+    sorted_products = sorted(safe_recommended.items(), key=lambda x: len(x[1]), reverse=True)
+    top_products = sorted_products[:4]
+
+    report = "✨ *توصيات أخصائية لافمنيت لكِ*\n"
+    report += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    report += f"🎯 *مشاكلك:* {', '.join(selected)}\n\n"
+
+    if pregnant:
+        report += "🤰 *تم مراعاة الحمل/الرضاعة في التوصيات*\n\n"
+
+    report += "━━━━━━━━━━━━━━━━━━━━\n"
+    report += "🛒 *المنتجات المناسبة لكِ:*\n\n"
+
+    for key, probs in top_products:
+        prod = PRODUCTS[key]
+        report += f"🌿 *{prod['name']}*\n"
+        report += f"✅ يعالج: {', '.join(probs)}\n"
+        report += f"📋 {prod['usage']}\n"
+        if prod.get("note"):
+            report += f"💡 {prod['note']}\n"
+        report += f"🔗 {prod['url']}\n\n"
+
+    # Check trio recommendation
+    trio_probs = ["تصبغات", "بقع داكنة وتصبغات", "شحوب وإرهاق البشرة"]
+    if any(p in selected for p in trio_probs) and not pregnant:
+        report += "━━━━━━━━━━━━━━━━━━━━\n"
+        report += "⭐ *التوصية الذهبية لتصبغاتك:*\n"
+        report += "الثلاثي السحري: زيت التين الشوكي + صابونة النيلة + ماسك النيلة\n"
+        report += "نتائج ملحوظة من 10-14 يوم 💚\n\n"
+
+    report += "━━━━━━━━━━━━━━━━━━━━\n"
+    report += f"🛍️ *تسوقي الآن:* {STORE_URL}\n"
+    report += "📞 *للاستفسار:* تواصلي معنا عبر المتجر مباشرة"
+    return report
+
+async def handle_product_inquiry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    question = update.message.text
+    typing_msg = await update.message.reply_text("⏳ جاري البحث عن إجابتك...")
+
+    # Build products knowledge base for Claude
+    products_info = ""
+    for key, prod in PRODUCTS.items():
+        products_info += f"\n\nمنتج: {prod['name']}\n"
+        products_info += f"الاستخدام: {prod['usage']}\n"
+        products_info += f"ملاحظات: {prod.get('note', '')}\n"
+        products_info += f"آمن للحامل/المرضع: {'نعم' if prod['pregnant_safe'] else 'لا'}\n"
+        products_info += f"يعالج: {', '.join(prod['problems'])}\n"
+
+    payload = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 1000,
+        "messages": [{
+            "role": "user",
+            "content": f"""أنتِ أخصائية بشرة من براند لافمنيت للعناية الطبيعية. 
+أجيبي على سؤال العميلة بشكل ودود ومختصر وواضح.
+لا تذكري أبداً كلمة "ذكاء اصطناعي" أو "بوت" - أنتِ أخصائية بشرة حقيقية من لافمنيت.
+استخدمي المعلومات التالية عن منتجات لافمنيت للإجابة:
+
+{products_info}
+
+سؤال العميلة: {question}
+
+أجيبي بالعربية بشكل ودود ومختصر. إذا السؤال خارج نطاق منتجات لافمنيت، وجهيها للتواصل مع المتجر مباشرة."""
+        }]
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                },
+                json=payload
+            )
+            resp.raise_for_status()
+            answer = resp.json()["content"][0]["text"]
+    except Exception as e:
+        logger.error(f"Claude API error: {e}")
+        answer = "عذراً، حدث خطأ. تواصلي معنا مباشرة عبر المتجر وسنساعدك 💚"
+
+    await typing_msg.delete()
+    restart_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 سؤال آخر", callback_data="inquiry")],
+        [InlineKeyboardButton("🌿 تحليل بشرتي", callback_data="restart")]
+    ])
+    await update.message.reply_text(
+        answer + f"\n\n🛍️ للطلب: {STORE_URL}",
+        reply_markup=restart_kb
+    )
+    return PRODUCT_INQUIRY
 
 async def handle_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data.clear()
-    await query.message.reply_text("🌿 مرحباً من جديد! أرسلي /start للبدء من جديد.")
-    return ConversationHandler.END
-
+    if query.data == "restart":
+        context.user_data.clear()
+        context.user_data["selected_problems"] = []
+        context.user_data["page"] = 0
+        await query.message.reply_text(
+            "💆‍♀️ *تحليل جديد — اختاري مشكلتك أو مشاكلك:*",
+            parse_mode="Markdown",
+            reply_markup=problems_keyboard(0, [])
+        )
+        return ASK_PROBLEM
+    elif query.data == "inquiry":
+        await query.message.reply_text(
+            "💬 اكتبي سؤالك عن أي منتج من لافمنيت 🌿"
+        )
+        return PRODUCT_INQUIRY
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("تم الإلغاء. أرسلي /start للبدء من جديد 🌿")
+    await update.message.reply_text("أرسلي /start للبدء من جديد 🌿")
     return ConversationHandler.END
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            WAITING_PHOTO: [
-                MessageHandler(filters.PHOTO, handle_photo),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_photo_choice),
+            MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu)],
+            ASK_PROBLEM: [CallbackQueryHandler(handle_problem_selection)],
+            ASK_PREGNANT: [CallbackQueryHandler(handle_pregnant, pattern="^pregnant_")],
+            SHOW_RESULT: [CallbackQueryHandler(handle_restart, pattern="^(restart|inquiry)$")],
+            PRODUCT_INQUIRY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_product_inquiry),
+                CallbackQueryHandler(handle_restart, pattern="^(restart|inquiry)$")
             ],
-            ASK_Q1: [CallbackQueryHandler(handle_q1, pattern="^skin_")],
-            ASK_Q2: [CallbackQueryHandler(handle_q2, pattern="^concern_")],
-            ASK_Q3: [CallbackQueryHandler(handle_q3, pattern="^climate_")],
-            ASK_Q4: [CallbackQueryHandler(handle_q4, pattern="^budget_")],
-            SHOW_RESULT: [CallbackQueryHandler(handle_restart, pattern="^restart$")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
     )
     app.add_handler(conv)
-    app.add_handler(CallbackQueryHandler(handle_restart, pattern="^restart$"))
     logger.info("🌿 لافمنيت بوت يعمل الآن...")
     app.run_polling(drop_pending_updates=True)
-
 
 if __name__ == "__main__":
     main()
