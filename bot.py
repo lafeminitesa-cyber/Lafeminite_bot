@@ -531,61 +531,117 @@ def build_recommendations(context):
     report += "📞 *للاستفسار:* تواصلي معنا عبر المتجر مباشرة"
     return report
 
-async def handle_product_inquiry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    question = update.message.text
-    typing_msg = await update.message.reply_text("⏳ جاري البحث عن إجابتك...")
+def search_products_by_question(question: str) -> str:
+    """Search products database based on keywords in question."""
+    question_lower = question.lower()
 
-    # Build products knowledge base for Claude
-    products_info = ""
-    for key, prod in PRODUCTS.items():
-        products_info += f"\n\nمنتج: {prod['name']}\n"
-        products_info += f"الاستخدام: {prod['usage']}\n"
-        products_info += f"ملاحظات: {prod.get('note', '')}\n"
-        products_info += f"آمن للحامل/المرضع: {'نعم' if prod['pregnant_safe'] else 'لا'}\n"
-        products_info += f"يعالج: {', '.join(prod['problems'])}\n"
-
-    payload = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 1000,
-        "messages": [{
-            "role": "user",
-            "content": f"""أنتِ أخصائية بشرة من براند لافمنيت للعناية الطبيعية. 
-أجيبي على سؤال العميلة بشكل ودود ومختصر وواضح.
-لا تذكري أبداً كلمة "ذكاء اصطناعي" أو "بوت" - أنتِ أخصائية بشرة حقيقية من لافمنيت.
-استخدمي المعلومات التالية عن منتجات لافمنيت للإجابة:
-
-{products_info}
-
-سؤال العميلة: {question}
-
-أجيبي بالعربية بشكل ودود ومختصر. إذا السؤال خارج نطاق منتجات لافمنيت، وجهيها للتواصل مع المتجر مباشرة."""
-        }]
+    # Keywords mapping
+    keywords = {
+        "حامل": "pregnant",
+        "حمل": "pregnant",
+        "مرضع": "pregnant",
+        "رضاعة": "pregnant",
+        "زيت التين": "زيت_التين_الشوكي",
+        "تين شوكي": "زيت_التين_الشوكي",
+        "كريم التين": "كريم_التين_الشوكي",
+        "ماء الورد": "ماء_الورد",
+        "سيروم العين": "سيروم_العين",
+        "هالات": "سيروم_العين",
+        "سيروم الرموش": "سيروم_الرموش",
+        "رموش": "سيروم_الرموش",
+        "حواجب": "سيروم_الرموش",
+        "صابونة النيلة": "صابونة_النيلة",
+        "صابون النيلة": "صابونة_النيلة",
+        "نيلة": "صابونة_النيلة",
+        "مقشر النيلة": "مقشر_النيلة",
+        "ماسك النيلة": "ماسك_النيلة",
+        "غسول النيلة": "غسول_النيلة",
+        "بودرة النيلة": "بودرة_النيلة",
+        "عكر فاسي": "مقشر_عكر_فاسي",
+        "العكر": "مقشر_عكر_فاسي",
+        "زبدة": "زبدة_عكر_فاسي",
+        "أرغان": "زيت_الارغان",
+        "ارغان": "زيت_الارغان",
+        "وايت بيل": "مجموعة_وايت_بيل",
+        "white bell": "مجموعة_وايت_بيل",
+        "ركب": "كريم_مناطق_داكنة",
+        "أكواع": "كريم_مناطق_داكنة",
+        "كوع": "كريم_مناطق_داكنة",
+        "مناطق حساسة": "كريم_مناطق_حساسة",
+        "إبط": "كريم_مناطق_حساسة",
+        "ابط": "كريم_مناطق_حساسة",
+        "تبريمة": "تبريمة_العروس",
+        "تبريم": "تبريمة_العروس",
+        "ساونا": "بدلة_الساونا",
+        "بدلة": "بدلة_الساونا",
+        "خفاف": "حجر_خفاف",
+        "قدم": "حجر_خفاف",
+        "صقلة": "صقلة_مغربية",
+        "صابون مغربي": "صابون_مغربي",
+        "ليفة": "ليفة_مغربية",
+        "مورد": "مورد_خدود",
+        "خدود": "مورد_خدود",
+        "مرطب شفاه": "مرطب_شفاه",
+        "شفاه": "مرطب_شفاه",
+        "مقشر شفاه": "مقشر_شفاه_عكر",
+        "حمضيات": "مقشر_شفاه_حمضيات",
+        "جواشا": "جواشا",
+        "حجر العكر": "حجر_عكر_فاسي",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                },
-                json=payload
-            )
-            resp.raise_for_status()
-            answer = resp.json()["content"][0]["text"]
-    except Exception as e:
-        logger.error(f"Claude API error: {e}")
-        answer = "عذراً، حدث خطأ. تواصلي معنا مباشرة عبر المتجر وسنساعدك 💚"
+    # Check for pregnant question
+    if any(k in question_lower for k in ["حامل", "حمل", "مرضع", "رضاعة"]):
+        safe = [p["name"] for p in PRODUCTS.values() if p["pregnant_safe"]]
+        unsafe = [p["name"] for p in PRODUCTS.values() if not p["pregnant_safe"]]
+        return (
+            "🤰 *منتجات لافمنيت للحامل والمرضع:*\n\n"
+            "✅ *آمنة للحامل والمرضع:*\n" +
+            "\n".join([f"• {n}" for n in safe]) +
+            "\n\n❌ *لا تناسب الحامل والمرضع:*\n" +
+            "\n".join([f"• {n}" for n in unsafe]) +
+            "\n\n⚠️ يُفضل دائماً استشارة طبيبك"
+        )
 
-    await typing_msg.delete()
+    # Search for specific product
+    found_key = None
+    for keyword, prod_key in keywords.items():
+        if keyword in question_lower:
+            found_key = prod_key
+            break
+
+    if found_key and found_key in PRODUCTS:
+        prod = PRODUCTS[found_key]
+        answer = f"🌿 *{prod['name']}*\n\n"
+        answer += f"✅ *مناسب لـ:* {', '.join(prod['problems'])}\n\n"
+        answer += f"📋 *طريقة الاستخدام:*\n{prod['usage']}\n\n"
+        if prod.get("note"):
+            answer += f"💡 *ملاحظة:* {prod['note']}\n\n"
+        answer += f"🤰 *للحامل والمرضع:* {'✅ آمن' if prod['pregnant_safe'] else '❌ لا ينصح به'}\n"
+        if prod.get("trio"):
+            answer += f"\n⭐ *توصية:* {prod['trio']}"
+        return answer
+
+    # General answer
+    return (
+        "💚 شكراً لسؤالك!\n\n"
+        "يمكنني مساعدتك في:\n"
+        "• طريقة استخدام أي منتج\n"
+        "• هل المنتج مناسب للحامل\n"
+        "• المنتج المناسب لمشكلتك\n\n"
+        "اكتبي اسم المنتج الذي تريدين معرفة معلومات عنه 🌿"
+    )
+
+
+async def handle_product_inquiry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    question = update.message.text
+    answer = search_products_by_question(question)
     restart_kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔄 سؤال آخر", callback_data="inquiry")],
         [InlineKeyboardButton("🌿 تحليل بشرتي", callback_data="restart")]
     ])
     await update.message.reply_text(
         answer + f"\n\n🛍️ للطلب: {STORE_URL}",
+        parse_mode="Markdown",
         reply_markup=restart_kb
     )
     return PRODUCT_INQUIRY
